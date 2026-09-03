@@ -12,7 +12,7 @@
       "image": "IMAGE1_NAME",
       "essential": true,
       "portMappings": [
-        { "containerPort": ${CONTAINER_PORT}, "protocol": "tcp" }
+        { "containerPort": "${CONTAINER_PORT}", "protocol": "tcp" }
       ],
       "healthCheck": {
         "command": ["CMD-SHELL", "curl -f http://localhost:${CONTAINER_PORT}${HEALTH_CHECK_PATH} || exit 1"],
