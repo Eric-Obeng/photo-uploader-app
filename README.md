@@ -12,13 +12,43 @@ A GitHub Actions workflow builds the container image on push and pushes it to Am
 
 ## Repo layout
 
-```
-backend/       # API service (S3 upload, RDS metadata, image listing)
-frontend/      # Photo gallery UI
-Dockerfile
+```text
+backend/                          # Express API (S3 upload, RDS metadata, image listing, /health)
+frontend/                         # React gallery UI (Vite)
+Dockerfile                        # Multi-stage build: frontend assets + backend runtime
+deploy/
+  appspec.yaml.template            # CodeDeploy ECS blue/green appspec, rendered at build time
+  taskdef.json.template            # ECS task definition, rendered at build time
 .github/workflows/build-and-push.yml
 ```
 
+## Deployment
+
+Nothing to run manually here — every push to `main` triggers
+`.github/workflows/build-and-push.yml`, which:
+
+1. Authenticates to AWS via OIDC (no long-lived credentials).
+2. Reads the deployed infra stack's outputs directly (`aws cloudformation describe-stacks`),
+   so nothing infra-specific is hardcoded in this repo.
+3. Builds the Docker image and pushes it tagged with the commit SHA.
+4. Renders `deploy/appspec.yaml.template` and `deploy/taskdef.json.template` using those
+   outputs, zips them, and uploads the bundle to the infra stack's pipeline-artifacts bucket.
+5. Pushes the same image tagged `latest` — this is what the infra repo's EventBridge rule
+   watches for, and it's pushed last so the deploy bundle is already in place before the
+   pipeline (and CodeDeploy blue/green) kicks off.
+
+### One-time setup
+
+Set these as **repository secrets** (Settings → Secrets and variables → Actions → Secrets)
+before the first push — see the infra repo's README for how to get the role ARN:
+
+| Secret | Value |
+| --- | --- |
+| `APP_DEPLOY_ROLE_ARN` | `AppDeployRoleArn` output from `photo-uploader-infra`'s `github-oidc.yaml` stack |
+| `AWS_REGION` | the region the infra is deployed to |
+| `ROOT_STACK_NAME` | the stack name given to `root.yaml` when setting up CloudFormation Git sync |
+
 ## Status
 
-Scaffolding only — application code is being built out incrementally.
+Application code, Dockerfile, and CI/CD workflow are complete. Not yet deployed —
+depends on the infra repo's stacks being deployed first.

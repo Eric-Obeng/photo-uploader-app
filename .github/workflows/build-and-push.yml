@@ -65,9 +65,9 @@ jobs:
         run: |
           mkdir -p dist-deploy
           envsubst '${CONTAINER_PORT}' \
-            < deploy/appspec.yaml.template > dist-deploy/appspec.yaml
+            < deploy/appspec.template.yaml > dist-deploy/appspec.yaml
           envsubst '${TASK_FAMILY} ${TASK_CPU} ${TASK_MEMORY} ${EXECUTION_ROLE_ARN} ${TASK_ROLE_ARN} ${CONTAINER_PORT} ${HEALTH_CHECK_PATH} ${DB_HOST} ${DB_PORT} ${DB_NAME} ${IMAGES_BUCKET_NAME} ${CLOUDFRONT_DOMAIN} ${DB_SECRET_ARN} ${LOG_GROUP} ${AWS_REGION}' \
-            < deploy/taskdef.json.template > dist-deploy/taskdef.json
+            < deploy/taskdef.template.json > dist-deploy/taskdef.json
           cd dist-deploy && zip deploy-spec.zip appspec.yaml taskdef.json
 
       - name: Upload deployment spec to S3

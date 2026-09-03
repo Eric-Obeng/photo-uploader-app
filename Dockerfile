@@ -15,8 +15,9 @@ FROM node:20-alpine
 RUN apk add --no-cache curl
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=backend-build /app/backend ./
-COPY --from=frontend-build /app/frontend/dist ./public
+COPY --chown=node:node --from=backend-build /app/backend ./
+COPY --chown=node:node --from=frontend-build /app/frontend/dist ./public
 
 EXPOSE 3000
+USER node
 CMD ["node", "src/index.js"]
