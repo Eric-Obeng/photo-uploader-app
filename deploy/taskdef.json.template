@@ -1,0 +1,45 @@
+{
+  "family": "${TASK_FAMILY}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "${TASK_CPU}",
+  "memory": "${TASK_MEMORY}",
+  "executionRoleArn": "${EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${TASK_ROLE_ARN}",
+  "containerDefinitions": [
+    {
+      "name": "app",
+      "image": "IMAGE1_NAME",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": ${CONTAINER_PORT}, "protocol": "tcp" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:${CONTAINER_PORT}${HEALTH_CHECK_PATH} || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "environment": [
+        { "name": "PORT", "value": "${CONTAINER_PORT}" },
+        { "name": "DB_HOST", "value": "${DB_HOST}" },
+        { "name": "DB_PORT", "value": "${DB_PORT}" },
+        { "name": "DB_NAME", "value": "${DB_NAME}" },
+        { "name": "IMAGES_BUCKET_NAME", "value": "${IMAGES_BUCKET_NAME}" },
+        { "name": "CLOUDFRONT_DOMAIN", "value": "${CLOUDFRONT_DOMAIN}" }
+      ],
+      "secrets": [
+        { "name": "DB_CREDENTIALS", "valueFrom": "${DB_SECRET_ARN}" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${LOG_GROUP}",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "app"
+        }
+      }
+    }
+  ]
+}

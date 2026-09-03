@@ -1,0 +1,82 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq and gettext-base (envsubst)
+        run: sudo apt-get update && sudo apt-get install -y jq gettext-base
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.APP_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Reads every value taskdef.json/appspec.yaml need straight from the
+      # deployed infra stack, so nothing infra-specific is hardcoded here.
+      - name: Fetch infrastructure outputs
+        run: |
+          OUTPUTS=$(aws cloudformation describe-stacks --stack-name "${{ secrets.ROOT_STACK_NAME }}" --query "Stacks[0].Outputs" --output json)
+          get() { echo "$OUTPUTS" | jq -r --arg k "$1" '.[] | select(.OutputKey==$k) | .OutputValue'; }
+          {
+            echo "AWS_REGION=${{ secrets.AWS_REGION }}"
+            echo "ECR_REPOSITORY_URI=$(get EcrRepositoryUri)"
+            echo "PIPELINE_ARTIFACTS_BUCKET=$(get PipelineArtifactsBucketName)"
+            echo "TASK_FAMILY=$(get EcsTaskDefinitionFamily)"
+            echo "TASK_CPU=$(get EcsTaskCpu)"
+            echo "TASK_MEMORY=$(get EcsTaskMemory)"
+            echo "EXECUTION_ROLE_ARN=$(get EcsTaskExecutionRoleArn)"
+            echo "TASK_ROLE_ARN=$(get EcsTaskRoleArn)"
+            echo "CONTAINER_PORT=$(get EcsContainerPort)"
+            echo "HEALTH_CHECK_PATH=$(get EcsHealthCheckPath)"
+            echo "LOG_GROUP=$(get EcsLogGroupName)"
+            echo "DB_HOST=$(get DatabaseEndpointAddress)"
+            echo "DB_PORT=$(get DatabaseEndpointPort)"
+            echo "DB_NAME=$(get DatabaseName)"
+            echo "DB_SECRET_ARN=$(get DatabaseSecretArn)"
+            echo "IMAGES_BUCKET_NAME=$(get ImagesBucketName)"
+            echo "CLOUDFRONT_DOMAIN=$(get CloudFrontDomainName)"
+          } >> "$GITHUB_ENV"
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build image
+        run: docker build -t "$ECR_REPOSITORY_URI:${{ github.sha }}" .
+
+      # Push the commit-SHA tag first. This does NOT match the EventBridge
+      # rule (which fires only on the "latest" tag), so it can't trigger a
+      # deployment before the appspec/taskdef bundle below is in place.
+      - name: Push image (commit SHA tag)
+        run: docker push "$ECR_REPOSITORY_URI:${{ github.sha }}"
+
+      - name: Render deployment spec
+        run: |
+          mkdir -p dist-deploy
+          envsubst '${CONTAINER_PORT}' \
+            < deploy/appspec.yaml.template > dist-deploy/appspec.yaml
+          envsubst '${TASK_FAMILY} ${TASK_CPU} ${TASK_MEMORY} ${EXECUTION_ROLE_ARN} ${TASK_ROLE_ARN} ${CONTAINER_PORT} ${HEALTH_CHECK_PATH} ${DB_HOST} ${DB_PORT} ${DB_NAME} ${IMAGES_BUCKET_NAME} ${CLOUDFRONT_DOMAIN} ${DB_SECRET_ARN} ${LOG_GROUP} ${AWS_REGION}' \
+            < deploy/taskdef.json.template > dist-deploy/taskdef.json
+          cd dist-deploy && zip deploy-spec.zip appspec.yaml taskdef.json
+
+      - name: Upload deployment spec to S3
+        run: aws s3 cp dist-deploy/deploy-spec.zip "s3://$PIPELINE_ARTIFACTS_BUCKET/source/deploy-spec.zip"
+
+      # Pushing "latest" last is deliberate: it's what triggers the
+      # EventBridge rule -> CodePipeline -> CodeDeploy blue/green, and by
+      # now the deploy-spec.zip it needs is already uploaded.
+      - name: Tag and push "latest"
+        run: |
+          docker tag "$ECR_REPOSITORY_URI:${{ github.sha }}" "$ECR_REPOSITORY_URI:latest"
+          docker push "$ECR_REPOSITORY_URI:latest"
