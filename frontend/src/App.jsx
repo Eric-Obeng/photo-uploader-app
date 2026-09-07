@@ -6,6 +6,7 @@ export default function App() {
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
 
   async function loadPhotos() {
     const res = await fetch("/api/photos");
@@ -17,6 +18,17 @@ export default function App() {
   useEffect(() => {
     loadPhotos();
   }, []);
+
+  function handleFileChange(event) {
+    setFile(event.target.files[0] ?? null);
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    setIsDragging(false);
+    const dropped = event.dataTransfer.files?.[0];
+    if (dropped) setFile(dropped);
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -50,50 +62,60 @@ export default function App() {
   }
 
   return (
-    <main style={{ maxWidth: 960, margin: "0 auto", padding: "2rem 1rem", fontFamily: "sans-serif" }}>
-      <h1>Photo Gallery</h1>
+    <main className="page">
+      <header className="page-header">
+        <h1>Photo Gallery</h1>
+        <p>Share a moment — drop a photo and add a description.</p>
+      </header>
 
-      <form onSubmit={handleSubmit} style={{ marginBottom: "2rem" }}>
-        <div style={{ marginBottom: "0.5rem" }}>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(event) => setFile(event.target.files[0] ?? null)}
-          />
-        </div>
-        <div style={{ marginBottom: "0.5rem" }}>
+      <form onSubmit={handleSubmit} className="upload-card">
+        <div className="upload-row">
+          <label
+            className={`dropzone${isDragging ? " is-dragging" : ""}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+          >
+            <input type="file" accept="image/*" onChange={handleFileChange} />
+            <span className="dropzone-icon">📷</span>
+            <span className="dropzone-label">
+              {file ? <strong>{file.name}</strong> : "Drag & drop or click to choose an image"}
+            </span>
+          </label>
+
           <input
             type="text"
             placeholder="Description"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            style={{ width: "100%", padding: "0.5rem" }}
+            className="description-input"
           />
+
+          <button type="submit" disabled={submitting} className="upload-button">
+            {submitting ? "Uploading..." : "Upload"}
+          </button>
         </div>
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Uploading..." : "Upload"}
-        </button>
-        {error && <p style={{ color: "crimson" }}>{error}</p>}
+        {error && <p className="error-message">{error}</p>}
       </form>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-          gap: "1rem",
-        }}
-      >
-        {photos.map((photo) => (
-          <figure key={photo.id} style={{ margin: 0 }}>
-            <img
-              src={photo.url}
-              alt={photo.description}
-              style={{ width: "100%", height: 180, objectFit: "cover", borderRadius: 8 }}
-            />
-            <figcaption>{photo.description}</figcaption>
-          </figure>
-        ))}
-      </div>
+      {photos.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">🖼️</div>
+          <p>No photos yet — be the first to upload one.</p>
+        </div>
+      ) : (
+        <div className="gallery">
+          {photos.map((photo, index) => (
+            <figure key={photo.id} className="gallery-item" style={{ "--i": index }}>
+              <img src={photo.url} alt={photo.description} loading="lazy" />
+              <figcaption className="gallery-caption">{photo.description}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
     </main>
   );
 }
