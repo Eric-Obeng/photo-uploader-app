@@ -50,5 +50,6 @@ before the first push — see the infra repo's README for how to get the role AR
 
 ## Status
 
-Application code, Dockerfile, and CI/CD workflow are complete. Not yet deployed —
-depends on the infra repo's stacks being deployed first.
+Infra is deployed (root stack `CREATE_COMPLETE`, ECS service bootstrapped with
+0 desired tasks since no image existed yet). This push triggers the first real
+build-and-push run.
