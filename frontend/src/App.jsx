@@ -65,7 +65,7 @@ export default function App() {
     <main className="page">
       <header className="page-header">
         <h1>Photo Gallery</h1>
-        <p>Share a moment — drop a photo and add a description.</p>
+        <p>Share a moment — drop a photo and add a  now.</p>
       </header>
 
       <form onSubmit={handleSubmit} className="upload-card">
